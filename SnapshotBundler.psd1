@@ -33,7 +33,7 @@ Copyright = '(c) Chen-HR. All rights reserved.'
 Description = 'A PowerShell utility to create a single, filtered source code snapshot (bundle) of a directory.'
 
 # Minimum version of the PowerShell engine required by this module
-PowerShellVersion = '7.0'
+PowerShellVersion = '5.0'
 
 # Name of the PowerShell host required by this module
 # PowerShellHostName = ''
@@ -102,7 +102,7 @@ PrivateData = @{
         # LicenseUri = ''
 
         # A URL to the main website for this project.
-        # ProjectUri = ''
+        ProjectUri = 'https://github.com/Chen-HR/SnapshotBundler'
 
         # A URL to an icon representing this module.
         # IconUri = ''
