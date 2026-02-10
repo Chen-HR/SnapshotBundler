@@ -1,64 +1,89 @@
 # SnapshotBundler
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.0%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A lightweight PowerShell utility designed to create a single, comprehensive, and filtered **code snapshot** (bundle) of a project directory. This tool is especially useful for **AI context feeding**, code review, or documentation generation by consolidating all relevant source files into a single structured output format (Markdown or XML).
+**SnapshotBundler** is a lightweight PowerShell module designed to consolidate an entire project directory into a single, structured file (**Markdown** or **XML**). 
+
+It intelligently filters out binary files and build artifacts, creating a clean, readable "snapshot" of your source code. This tool is ideal for **code reviews**, **project archiving**, **creating technical documentation appendices**, or simply sharing a codebase in a portable format.
 
 ---
 
 ## ✨ Features
 
-* **Single-File Output:** Consolidate an entire project's source code into a single `Markdown` or `XML` file.
-* **Intelligent Filtering:** Supports exclusion of specified file extensions (e.g., `.dll`, `.jpg`) and common development directories (e.g., `node_modules`, `.git`, `bin`).
-* **Language Hinting:** Markdown output automatically includes language hints for syntax highlighting (e.g., `powershell`, `python`, `csharp`).
-* **Structured Output:** Markdown uses file headers (`## File:`) and code blocks, while XML uses structured `<File>` elements nested under a `<Directory>` root.
+* **Project Consolidation**: Merges scattered source files into one comprehensive document.
+* **Smart Filtering**: Automatically excludes compiled binaries (e.g., `.dll`, `.exe`), media files, and heavy directories (e.g., `node_modules`, `.git`, `bin`) to keep the snapshot lightweight.
+* **Readable Markdown Output**: Generates Markdown with auto-detected syntax highlighting hints (e.g., `python`, `csharp`, `json`) for optimal readability.
+* **Structured XML Output**: Provides a strictly structured XML format suitable for programmatic processing, reporting, or integration with other tools.
+
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-* PowerShell 5.0 or newer (Windows, macOS, Linux).
+* **PowerShell 5.0** or newer (Compatible with Windows, macOS, and Linux).
 
-### Installation (As a Script)
+### Installation
 
-1. Download the `SnapshotBundler.ps1` script to your system.
-2. Import the functions into your current session:
+1. Download the `SnapshotBundler` folder containing `.psd1` and `.psm1` files.
+2. Place the folder into your PowerShell modules path:
+   * **Windows**: `C:\Users\<User>\Documents\PowerShell\Modules\`
+   * **macOS/Linux**: `~/.local/share/powershell/Modules/`
 
-    ```powershell
-    . .\SnapshotBundler.ps1
-    ```
-
-### Usage
-
-#### 1. Export to Markdown (`.md`)
-
-This is the recommended format for AI prompts (e.g., LLMs) or general human readability. The output header uses `# Path`.
+Alternatively, you can import it manually from any location:
 
 ```powershell
-# Example 1: Export the current directory to a Markdown file
-Invoke-SnapshotBundleToMarkdown | Out-File -FilePath "ProjectSnapshot.md" -Encoding UTF8
+Import-Module ".\Path\To\SnapshotBundler\SnapshotBundler.psd1"
 
-# Example 2: Export a specific path
-Invoke-SnapshotBundleToMarkdown -Path "C:\MySourceCode\BackendService" | Out-File "BackendSnapshot.md" -Encoding UTF8
 ```
 
-#### 2. Export to XML (`.xml`)
+---
 
-This format is suitable for programmatic consumption, structured data processing, or integration with specific toolchains. The root element is `<Directory>`.
+## 💻 Usage
+
+### 1. Export to Markdown (`.md`)
+
+Best for human readability, documentation, or code reviews. The output includes file paths as headers and code fences for content.
 
 ```powershell
-# Export the current directory to a structured XML file
-Invoke-SnapshotBundleToXml | Out-File -FilePath "ProjectSnapshot.xml" -Encoding UTF8
+# Export the current directory to a Markdown file
+Invoke-SnapshotBundleToMarkdown | Out-File -FilePath "SourceSnapshot.md" -Encoding UTF8
+
+# Export a specific project path
+Invoke-SnapshotBundleToMarkdown -Path "C:\Projects\BackendAPI" | Out-File "BackendAPI.md" -Encoding UTF8
+
 ```
+
+### 2. Export to XML (`.xml`)
+
+Best for data processing or when a strict schema is required.
+
+```powershell
+# Export the current directory to an XML file
+Invoke-SnapshotBundleToXml | Out-File -FilePath "SourceSnapshot.xml" -Encoding UTF8
+
+```
+
+---
 
 ## ⚙️ Configuration
 
-The exclusion logic is managed by the global hashtable `$SnapshotBundleConfig` defined at the top of the script.
+The module exposes a global configuration variable `$SnapshotBundleConfig`, allowing you to customize exclusion rules dynamically in your session.
 
-* **`ExcludedExtensions`**: Files to skip content inclusion (content is replaced with an omission note).
-* **`ExcludedDirectories`**: Directories that, if encountered in the file path, will exclude the entire file.
+### modifying Exclusion Rules
 
-## 📄 License
+You can add specific extensions or directory names to ignore during the bundling process.
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+```powershell
+# Example: Exclude temporary folder and TIFF images
+$SnapshotBundleConfig.ExcludedDirectories += "temp_output"
+$SnapshotBundleConfig.ExcludedExtensions += ".tiff"
+
+```
+
+### Default Exclusions
+
+By default, the tool excludes:
+
+* **Directories**: `node_modules`, `.git`, `bin`, `obj`, `dist`, `build`, `.vscode`, etc.
+* **Extensions**: `.exe`, `.dll`, `.zip`, `.png`, `.jpg`, `.log`, etc.

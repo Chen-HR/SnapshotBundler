@@ -10,14 +10,14 @@ $SnapshotBundleConfig = @{
     '.dll', '.exe', '.pdb', '.bin', '.hex', '.obj', '.o', '.lib',
     '.iso', '.img', '.zip', '.tar', '.gz', '.7z', '.rar',
     '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico',
-    '.mp4', '.mov', '.avi', '.mp3', '.wav',
+    '.mp4', '.mov', '.avi', '.mp3', '.wav', '.mat',
     '.log', '.bak', '.tmp', '.DS_Store'
   )
   
   # Defines directory names (case-insensitive during filtering) that, if encountered
   # as any segment in a file's relative path, will cause the file to be excluded.
   ExcludedDirectories = @(
-    'node_modules', 'site-packages', 'bin', 'fonts', 'obj', '.git', '.vs', '.venv', 'packages', 'dist', 'build', 'out', '__pycache__', 'egg-info'
+    'node_modules', 'site-packages', 'bin', 'ref', 'fonts', 'obj', '.git', '.vs', '.vscode', '.venv', 'packages', 'dist', 'lib', 'build', 'out', 'tmp', '__pycache__', '*.egg-info'
   )
 }
 
@@ -76,6 +76,7 @@ function Get-FileLanguageHint {
     'xml'   { 'xml' }
     'md'  { 'markdown' }
     'tex'   { 'latex' }
+    'lua'   { 'lua' }
     
     # --- Handle dotless files (BaseName) ---
     'makefile' { 'makefile' }
@@ -222,7 +223,7 @@ function Invoke-SnapshotBundleToMarkdown {
         $content = Get-Content -Path $file.FullName -Raw -Encoding UTF8
         
         # Handle potential triple backticks in Markdown content to prevent block breakage.
-        if ($languageHint -eq "markdown" -And -not [string]::IsNullOrEmpty($content)) {
+        if (-not [string]::IsNullOrEmpty($content)) {
           $content = $content.Replace("``````", "\``\``\``")
         }
 
@@ -345,3 +346,7 @@ function Invoke-SnapshotBundleToXml {
     Write-Error "An unexpected error occurred during XML export: $($_.Exception.Message)"
   }
 }
+
+# --- MODULE EXPORTS ---
+# Explicitly export the functions and the configuration variable
+Export-ModuleMember -Function Invoke-SnapshotBundleToMarkdown, Invoke-SnapshotBundleToXml, Get-SnapshotBundleFiles, Get-FileLanguageHint -Variable SnapshotBundleConfig
