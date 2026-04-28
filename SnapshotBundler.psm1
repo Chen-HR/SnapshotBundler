@@ -7,20 +7,20 @@ A shared configuration object for defining file and directory exclusion criteria
 $SnapshotBundleConfig = @{
   # Defines file extensions (including the dot) for which content will be excluded from output.
   ExcludedExtensions = @(
-    '.dll', '.bin', '.hex', '.obj', '.o', '.lib', '.exe', '.pyc', '.pyo', '.pdb',
-    '.iso', '.img', '.zip', '.tar', '.gz', '.7z', '.rar',
-    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico',
-    '.mp4', '.mov', '.avi', '.mp3', '.wav', '.mat',
+    '.dll', '.bin', '.hex', '.obj', '.o', '.lib', '.exe', 
+    '.pyc', '.pyo', '.pdb', 
+    '.iso', '.img', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.mp4', '.mov', '.avi', '.mp3', '.wav', '.mat', 
+    '.zip', '.tar', '.gz', '.7z', '.rar', 
     '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'
-    '.log', '.bak', '.tmp', '.DS_Store'
+    '.log', '.bak', '.tmp', '.DS_Store', '.ttf'
   )
   
   # Defines directory names (case-insensitive during filtering) that, if encountered
   # as any segment in a file's relative path, will cause the file to be excluded.
   ExcludedDirectories = @(
-    'bin', 'ref', 'fonts', 'obj', 'lib', 'out', 'tmp', 'dist', 'build', '__pycache__', 
+    'bin', 'obj', 'out', 'tmp', 'dist', 'build', '__pycache__', 
     '.git', '.vs', '.vscode', '.venv', 
-    'node_modules', 'site-packages', 'packages', '*.egg-info'
+    'node_modules', 'site-packages', 'packages', '*.egg-info', '*.lock'
   )
 }
 
