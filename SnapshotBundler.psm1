@@ -9,7 +9,7 @@ $SnapshotBundleConfig = @{
   ExcludedExtensions = @(
     '.dll', '.bin', '.hex', '.obj', '.o', '.lib', '.exe', 
     '.pyc', '.pyo', '.pdb', 
-    '.iso', '.img', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.mp4', '.mov', '.avi', '.mp3', '.wav', '.mat', 
+    '.iso', '.img', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.mp4', '.mov', '.avi', '.mp3', '.wav', '.mat', '.drawio', 
     '.zip', '.tar', '.gz', '.7z', '.rar', 
     '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'
     '.log', '.bak', '.tmp', '.DS_Store', '.ttf'
