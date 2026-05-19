@@ -11,7 +11,7 @@ $SnapshotBundleConfig = @{
     '.pyc', '.pyo', '.pdb', 
     '.iso', '.img', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.mp4', '.mov', '.avi', '.mp3', '.wav', '.mat', '.drawio', 
     '.zip', '.tar', '.gz', '.7z', '.rar', 
-    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
     '.log', '.bak', '.tmp', '.DS_Store', '.ttf'
   )
   
@@ -51,9 +51,9 @@ function Get-FileLanguageHint {
     # --- Standard Extensions ---
     'ps1'   { 'powershell' }
     'cmd'   { 'cmd' }
-    'sh'  { 'bash' }
-    'js'  { 'javascript' }
-    'ts'  { 'typescript' }
+    'sh'    { 'bash' }
+    'js'    { 'javascript' }
+    'ts'    { 'typescript' }
     'jsx'   { 'jsx' }
     'tsx'   { 'tsx' }
     'json'  { 'json' }
@@ -62,33 +62,33 @@ function Get-FileLanguageHint {
     'css'   { 'css' }
     'scss'  { 'scss' }
     'less'  { 'less' }
-    'py'  { 'python' }
+    'py'    { 'python' }
     'pyi'   { 'python' }
-    'cs'  { 'csharp' }
+    'cs'    { 'csharp' }
     'java'  { 'java' }
-    'c'   { 'c' }
-    'h'   { 'c' }
+    'c'     { 'c' }
+    'h'     { 'c' }
     'cpp'   { 'cpp' }
     'hpp'   { 'cpp' }
     'php'   { 'php' }
-    'rb'  { 'ruby' }
-    'go'  { 'go' }
+    'rb'    { 'ruby' }
+    'go'    { 'go' }
     'yaml'  { 'yaml' }
     'yml'   { 'yaml' }
     'toml'  { 'toml' }
     'xml'   { 'xml' }
-    'md'  { 'markdown' }
+    'md'    { 'markdown' }
     'tex'   { 'latex' }
     'lua'   { 'lua' }
-    'm'   { 'matlab' }
+    'm'     { 'matlab' }
     'csv'   { 'csv' }
     'tsv'   { 'tsv' }
 
     # --- Handle dotless files (BaseName) ---
-    'makefile' { 'makefile' }
+    'makefile'   { 'makefile' }
     'dockerfile' { 'dockerfile' }
-    'readme' { 'markdown' }
-    'license' { 'text' }
+    'readme'     { 'markdown' }
+    'license'    { 'text' }
 
     default { 'text' }
   }
@@ -119,7 +119,8 @@ function Get-SnapshotBundleFiles {
 
   # Resolve the input path to its absolute FullName for accurate comparison and length calculation.
   try {
-    $physicalPath = (Get-Item -Path $Path -ErrorAction Stop).FullName.TrimEnd('\', '/')
+    # Use -LiteralPath to correctly resolve root directories containing square brackets if applicable
+    $physicalPath = (Get-Item -LiteralPath $Path -ErrorAction Stop).FullName.TrimEnd('\', '/')
   }
   catch {
     Write-Error "Error: The specified path is not a valid directory or does not exist: '$Path'"
@@ -129,14 +130,11 @@ function Get-SnapshotBundleFiles {
   $physicalPathLength = $physicalPath.Length
   $excludedDirectories = $SnapshotBundleConfig.ExcludedDirectories
 
-  # Retrieve all files recursively and apply filtering
-  $files = Get-ChildItem -Path $physicalPath -Recurse -File | Where-Object {
+  $files = Get-ChildItem -LiteralPath $physicalPath -Recurse -File | Where-Object {
     
-    # Calculate the relative path from the absolute root.
     $relativePath = $_.FullName.Substring($physicalPathLength).TrimStart('\' , '/')
     $isInsideExcludedDir = $false
     
-    # Check if any path segment matches an excluded directory name.
     foreach ($segment in ($relativePath -split '[\\/]')) {
       if ($excludedDirectories -contains $segment) {
         $isInsideExcludedDir = $true
@@ -144,7 +142,6 @@ function Get-SnapshotBundleFiles {
       }
     }
     
-    # Only include the file if it is NOT inside an excluded directory.
     -not $isInsideExcludedDir
   }
   
@@ -194,7 +191,7 @@ function Invoke-SnapshotBundleToMarkdown {
   }
 
   $files = Get-SnapshotBundleFiles -Path $processPath
-  if ($files.Count -eq 0 -and (Test-Path -Path $processPath -PathType Container)) {
+  if ($files.Count -eq 0 -and (Test-Path -LiteralPath $processPath -PathType Container)) {
      Write-Host "No files found for processing after filtering in '$processPath'."
      return
   }
@@ -226,7 +223,9 @@ function Invoke-SnapshotBundleToMarkdown {
       $markdownOutput += "`n`n## File: ``$finalRelativePath```n`n" 
       
       if (-not $isExcludedExtension) {
-        $content = Get-Content -Path $file.FullName -Raw -Encoding UTF8
+        $fileFullName = $file.FullName
+        # FIX: Changed -Path to -LiteralPath to avoid wildcard parsing of square brackets
+        $content = Get-Content -LiteralPath "$fileFullName" -Raw -Encoding UTF8
         
         # Handle potential triple backticks in Markdown content to prevent block breakage.
         if (-not [string]::IsNullOrEmpty($content)) {
@@ -288,7 +287,7 @@ function Invoke-SnapshotBundleToXml {
   }
 
   $files = Get-SnapshotBundleFiles -Path $processPath
-  if ($files.Count -eq 0 -and (Test-Path -Path $processPath -PathType Container)) {
+  if ($files.Count -eq 0 -and (Test-Path -LiteralPath $processPath -PathType Container)) {
      Write-Host "No files found for processing after filtering in '$processPath'."
      return
   }
@@ -330,7 +329,8 @@ function Invoke-SnapshotBundleToXml {
       $fileElement.SetAttribute("LanguageHint", $languageHint)
       
       if (-not $isExcludedExtension) {
-        $content = Get-Content -Path $file.FullName -Raw -Encoding UTF8
+        # FIX: Changed -Path to -LiteralPath to avoid wildcard parsing of square brackets
+        $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
         
         # Create CDATA section for content to avoid XML parsing issues.
         $cdataSection = $xmlDoc.CreateCDataSection($content)
@@ -354,5 +354,4 @@ function Invoke-SnapshotBundleToXml {
 }
 
 # --- MODULE EXPORTS ---
-# Explicitly export the functions and the configuration variable
 Export-ModuleMember -Function Invoke-SnapshotBundleToMarkdown, Invoke-SnapshotBundleToXml, Get-SnapshotBundleFiles, Get-FileLanguageHint -Variable SnapshotBundleConfig
