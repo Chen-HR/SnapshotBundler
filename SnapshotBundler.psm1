@@ -116,7 +116,10 @@ Retrieves a list of file objects from a path after applying pattern-based exclus
 #>
 function Get-SnapshotBundleFiles {
   [CmdletBinding()]
-  param([Parameter(Mandatory=$true)] [string]$Path)
+  param(
+    [Parameter(Mandatory=$true)] [string]$Path,
+    [string[]]$ExcludedPatterns = @()
+  )
 
   try {
     $physicalPath = (Get-Item -LiteralPath $Path -ErrorAction Stop).FullName.TrimEnd('\', '/')
@@ -126,25 +129,28 @@ function Get-SnapshotBundleFiles {
   }
 
   $physicalPathLength = $physicalPath.Length
+  
+  # Merge global config with dynamic parameters
+  $effectivePatterns = $SnapshotBundleConfig.ExcludedPatterns + $ExcludedPatterns
 
   Get-ChildItem -LiteralPath $physicalPath -Recurse -File | Where-Object {
     $relativePath = $_.FullName.Substring($physicalPathLength).TrimStart('\', '/')
-    -not (Test-PathMatchPattern -Path $relativePath -Patterns $SnapshotBundleConfig.ExcludedPatterns)
+    -not (Test-PathMatchPattern -Path $relativePath -Patterns $effectivePatterns)
   }
 }
-
-# --- EXPORT FUNCTIONS ---
-
 function Invoke-SnapshotBundleToMarkdown {
   [CmdletBinding()]
-  param([Parameter(Position=0)] [string]$Path = "")
+  param(
+    [Parameter(Position=0)] [string]$Path = "",
+    [string[]]$ExcludedPatterns = @()
+  )
 
   $processPath = if ([string]::IsNullOrEmpty($Path)) { "." } else { $Path }
   $physicalPath = (Get-Item -Path $processPath -ErrorAction Stop).FullName.TrimEnd('\', '/')
   $physicalPathLength = $physicalPath.Length
   $exportRootName = if ([string]::IsNullOrEmpty($Path)) { "" } else { $Path.Replace('\', '/').TrimEnd('/') }
 
-  $files = Get-SnapshotBundleFiles -Path $processPath
+  $files = Get-SnapshotBundleFiles -Path $processPath -ExcludedPatterns $ExcludedPatterns
   
   $markdownOutput = "# Directory: ``$exportRootName```n`n- Export Time: $(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')`n`n"
   
@@ -155,26 +161,27 @@ function Invoke-SnapshotBundleToMarkdown {
     $valueToPass = if ([string]::IsNullOrEmpty($file.Extension)) { $file.BaseName } else { $file.Extension }
     $languageHint = Get-FileLanguageHint -NameOrExtension $valueToPass
 
-    $markdownOutput += "`n`n## File: ``$finalRelativePath```n`n" 
+    $markdownOutput += "## File: ``$finalRelativePath```n`n" 
     
     $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
-    $markdownOutput += "````````$languageHint`n$content`n````````"
-    
-    $markdownOutput += "`n`n"
+    $markdownOutput += "````````$languageHint`n$content`n`````````n`n"
   }
   Write-Output $markdownOutput
 }
 
 function Invoke-SnapshotBundleToXml {
   [CmdletBinding()]
-  param([Parameter(Position=0)] [string]$Path = "")
+  param(
+    [Parameter(Position=0)] [string]$Path = "",
+    [string[]]$ExcludedPatterns = @()
+  )
 
   $processPath = if ([string]::IsNullOrEmpty($Path)) { "." } else { $Path }
   $physicalPath = (Get-Item -Path $processPath -ErrorAction Stop).FullName.TrimEnd('\', '/')
   $physicalPathLength = $physicalPath.Length
   $exportRootName = if ([string]::IsNullOrEmpty($Path)) { "" } else { $Path.Replace('\', '/').TrimEnd('/') }
 
-  $files = Get-SnapshotBundleFiles -Path $processPath
+  $files = Get-SnapshotBundleFiles -Path $processPath -ExcludedPatterns $ExcludedPatterns
   
   $xmlDoc = New-Object -TypeName System.Xml.XmlDocument
   $rootElement = $xmlDoc.CreateElement("Directory")
