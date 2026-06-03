@@ -2,26 +2,42 @@
 
 <#
 .SYNOPSIS
-A shared configuration object for defining file and directory exclusion criteria.
+A shared configuration object for defining glob-based exclusion criteria.
 #>
 $SnapshotBundleConfig = @{
-  # Defines file extensions (including the dot) for which content will be excluded from output.
-  ExcludedExtensions = @(
-    '.dll', '.bin', '.hex', '.obj', '.o', '.lib', '.exe', 
-    '.pyc', '.pyo', '.pdb', 
-    '.iso', '.img', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.mp4', '.mov', '.avi', '.mp3', '.wav', '.mat', '.drawio', 
-    '.zip', '.tar', '.gz', '.7z', '.rar', 
-    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-    '.log', '.bak', '.tmp', '.DS_Store', '.ttf'
-  )
-  
-  # Defines directory names (case-insensitive during filtering) that, if encountered
-  # as any segment in a file's relative path, will cause the file to be excluded.
-  ExcludedDirectories = @(
+  # Supports .gitignore style glob patterns (e.g., 'bin', '*.log', '**/temp/*')
+  ExcludedPatterns = @(
     'bin', 'obj', 'out', 'tmp', 'dist', 'build', '__pycache__', 
-    '.git', '.vs', '.vscode', '.venv', 
-    'node_modules', 'site-packages', 'packages', '*.egg-info', '*.lock'
+    '.git', '.vs', '.vscode', '.venv', 'node_modules',
+    '*.dll', '*.exe', '*.log', '*.tmp', '*.DS_Store', '*.py[codz]'
   )
+}
+
+<#
+.SYNOPSIS
+Helper function to test if a path matches any of the provided glob patterns.
+Checks full path and individual directory segments.
+#>
+function Test-PathMatchPattern {
+  param(
+    [Parameter(Mandatory=$true)] [string]$Path,
+    [Parameter(Mandatory=$true)] [string[]]$Patterns
+  )
+  # Split path into segments to check directory levels
+  $segments = $Path -split '[\\/]'
+  
+  foreach ($pattern in $Patterns) {
+    $wildcard = [System.Management.Automation.WildcardPattern]::new($pattern, 'IgnoreCase')
+    
+    # Check if the full path matches
+    if ($wildcard.IsMatch($Path)) { return $true }
+    
+    # Check if any part of the path matches (e.g., if 'bin' matches any directory in the path)
+    foreach ($seg in $segments) {
+      if ($wildcard.IsMatch($seg)) { return $true }
+    }
+  }
+  return $false
 }
 
 <#
@@ -96,261 +112,92 @@ function Get-FileLanguageHint {
 
 <#
 .SYNOPSIS
-Retrieves a list of file objects from a path after applying directory exclusions.
-
-.DESCRIPTION
-This function is responsible for navigating the directory structure defined by $Path,
-resolving the absolute path, and recursively collecting file objects. Files are
-excluded if any segment of their relative path matches an entry in 
-$SnapshotBundleConfig.ExcludedDirectories. File extension exclusion is handled
-by the calling functions.
-
-.PARAMETER Path
-The starting directory path from which to begin file collection.
-.RETURNS
-An array of System.IO.FileInfo objects that passed the directory exclusion filter.
+Retrieves a list of file objects from a path after applying pattern-based exclusions.
 #>
 function Get-SnapshotBundleFiles {
   [CmdletBinding()]
-  param(
-    [Parameter(Mandatory=$true)]
-    [string]$Path
-  )
+  param([Parameter(Mandatory=$true)] [string]$Path)
 
-  # Resolve the input path to its absolute FullName for accurate comparison and length calculation.
   try {
-    # Use -LiteralPath to correctly resolve root directories containing square brackets if applicable
     $physicalPath = (Get-Item -LiteralPath $Path -ErrorAction Stop).FullName.TrimEnd('\', '/')
-  }
-  catch {
-    Write-Error "Error: The specified path is not a valid directory or does not exist: '$Path'"
+  } catch {
+    Write-Error "Error: Path '$Path' not found."
     return @()
   }
 
   $physicalPathLength = $physicalPath.Length
-  $excludedDirectories = $SnapshotBundleConfig.ExcludedDirectories
 
-  $files = Get-ChildItem -LiteralPath $physicalPath -Recurse -File | Where-Object {
-    
-    $relativePath = $_.FullName.Substring($physicalPathLength).TrimStart('\' , '/')
-    $isInsideExcludedDir = $false
-    
-    foreach ($segment in ($relativePath -split '[\\/]')) {
-      if ($excludedDirectories -contains $segment) {
-        $isInsideExcludedDir = $true
-        break
-      }
-    }
-    
-    -not $isInsideExcludedDir
+  Get-ChildItem -LiteralPath $physicalPath -Recurse -File | Where-Object {
+    $relativePath = $_.FullName.Substring($physicalPathLength).TrimStart('\', '/')
+    -not (Test-PathMatchPattern -Path $relativePath -Patterns $SnapshotBundleConfig.ExcludedPatterns)
   }
-  
-  return $files
 }
-
 
 # --- EXPORT FUNCTIONS ---
 
-<#
-.SYNOPSIS
-Generates a single Markdown-formatted string containing the file structure and content of a directory.
-
-.DESCRIPTION
-This function recursively processes files within the specified directory, applies configured
-directory exclusions via Get-SnapshotBundleFiles, and then applies file extension exclusion.
-For included files, the content is embedded within Markdown code blocks, with a language
-hint derived from Get-FileLanguageHint. For excluded files, the content is omitted, and 
-a notation is included.
-
-.PARAMETER Path
-The full path to the source directory. If omitted, the current directory ('.') is used.
-.EXAMPLE
-Invoke-SnapshotBundleToMarkdown $Directory
-.EXAMPLE
-Invoke-SnapshotBundleToMarkdown | Out-File export.md
-#>
 function Invoke-SnapshotBundleToMarkdown {
   [CmdletBinding()]
-  param(
-    [Parameter(Position=0)] 
-    [string]$Path = "" 
-  )
+  param([Parameter(Position=0)] [string]$Path = "")
 
-  # Determine the actual path for processing ('.') and the path for display.
   $processPath = if ([string]::IsNullOrEmpty($Path)) { "." } else { $Path }
-  
-  # Resolve the physical path for file filtering and relative path calculation.
   $physicalPath = (Get-Item -Path $processPath -ErrorAction Stop).FullName.TrimEnd('\', '/')
   $physicalPathLength = $physicalPath.Length
-
-  # Determine the root name for the output header and file path prefix.
-  $exportRootName = if ([string]::IsNullOrEmpty($Path)) { 
-    "" 
-  } else { 
-    $Path.Replace('\', '/').TrimEnd('/')
-  }
+  $exportRootName = if ([string]::IsNullOrEmpty($Path)) { "" } else { $Path.Replace('\', '/').TrimEnd('/') }
 
   $files = Get-SnapshotBundleFiles -Path $processPath
-  if ($files.Count -eq 0 -and (Test-Path -LiteralPath $processPath -PathType Container)) {
-     Write-Host "No files found for processing after filtering in '$processPath'."
-     return
-  }
-
-  # Initialize the Markdown output string with the header.
-  $markdownOutput = "# Directory: ``$exportRootName```n`n- Export Time: $(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')`n`n---"
   
-  try {
-    foreach ($file in $files) {
-      # Calculate the relative path within the physical root.
-      $internalRelativePath = $file.FullName.Substring($physicalPathLength).TrimStart('\' , '/')
-      
-      # Construct the final path with the export root name prefix (if applicable).
-      if ([string]::IsNullOrEmpty($exportRootName)) {
-        $finalRelativePath = $internalRelativePath.Replace('\', '/')
-      } else {
-        $finalRelativePath = "$exportRootName/$internalRelativePath".Replace('\', '/').Replace('//', '/')
-      }
+  $markdownOutput = "# Directory: ``$exportRootName```n`n- Export Time: $(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')`n`n"
+  
+  foreach ($file in $files) {
+    $internalRelativePath = $file.FullName.Substring($physicalPathLength).TrimStart('\', '/')
+    $finalRelativePath = if ([string]::IsNullOrEmpty($exportRootName)) { $internalRelativePath.Replace('\', '/') } else { "$exportRootName/$internalRelativePath".Replace('\', '/').Replace('//', '/') }
 
-      # Check for file extension exclusion.
-      $extension = $file.Extension.ToLower()
-      $isExcludedExtension = $SnapshotBundleConfig.ExcludedExtensions -contains $extension
-      
-      # Get language hint for all files.
-      $valueToPass = if ([string]::IsNullOrEmpty($file.Extension)) { $file.BaseName } else { $file.Extension }
-      $languageHint = Get-FileLanguageHint -NameOrExtension $valueToPass
+    $valueToPass = if ([string]::IsNullOrEmpty($file.Extension)) { $file.BaseName } else { $file.Extension }
+    $languageHint = Get-FileLanguageHint -NameOrExtension $valueToPass
 
-      # Append file information header.
-      $markdownOutput += "`n`n## File: ``$finalRelativePath```n`n" 
-      
-      if (-not $isExcludedExtension) {
-        $fileFullName = $file.FullName
-        # FIX: Changed -Path to -LiteralPath to avoid wildcard parsing of square brackets
-        $content = Get-Content -LiteralPath "$fileFullName" -Raw -Encoding UTF8
-        
-        # Handle potential triple backticks in Markdown content to prevent block breakage.
-        if (-not [string]::IsNullOrEmpty($content)) {
-          $content = $content.Replace("``````", "\``\``\``")
-        }
-
-        $markdownOutput += "``````$languageHint`n$content`n``````"
-      } else {
-        # Notation for excluded content.
-        $markdownOutput += "Content Omitted (Extension: $extension)."
-      }
-      $markdownOutput += "`n`n---" # File separator
-    }
-
-    Write-Output $markdownOutput
-
-  } catch {
-    Write-Error "An unexpected error occurred during Markdown export: $($_.Exception.Message)"
+    $markdownOutput += "`n`n## File: ``$finalRelativePath```n`n" 
+    
+    $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
+    $markdownOutput += "````````$languageHint`n$content`n````````"
+    
+    $markdownOutput += "`n`n"
   }
+  Write-Output $markdownOutput
 }
 
-<#
-.SYNOPSIS
-Generates a structured XML document string containing the file structure and content of a directory.
-
-.DESCRIPTION
-This function recursively processes files within the specified directory, applies configured
-directory exclusions via Get-SnapshotBundleFiles, and then applies file extension exclusion.
-For included files, the content is embedded within a CDATA section inside the <File> element.
-For excluded files, an attribute is added to the <File> element indicating content omission.
-The final output is the XML document's outer XML string.
-
-.PARAMETER Path
-The full path to the source directory. If omitted, the current directory ('.') is used.
-.EXAMPLE
-Invoke-SnapshotBundleToMarkdown $Directory
-.EXAMPLE
-Invoke-SnapshotBundleToMarkdown | Out-File export.md
-#>
 function Invoke-SnapshotBundleToXml {
   [CmdletBinding()]
-  param(
-    [Parameter(Position=0)] 
-    [string]$Path = "" 
-  )
+  param([Parameter(Position=0)] [string]$Path = "")
 
-  # Determine the actual path for processing ('.') and the path for display.
   $processPath = if ([string]::IsNullOrEmpty($Path)) { "." } else { $Path }
-  
-  # Resolve the physical path for file filtering and relative path calculation.
   $physicalPath = (Get-Item -Path $processPath -ErrorAction Stop).FullName.TrimEnd('\', '/')
   $physicalPathLength = $physicalPath.Length
-
-  # Determine the root name for the output attribute and file path prefix.
-  $exportRootName = if ([string]::IsNullOrEmpty($Path)) { 
-    "" 
-  } else { 
-    $Path.Replace('\', '/').TrimEnd('/')
-  }
+  $exportRootName = if ([string]::IsNullOrEmpty($Path)) { "" } else { $Path.Replace('\', '/').TrimEnd('/') }
 
   $files = Get-SnapshotBundleFiles -Path $processPath
-  if ($files.Count -eq 0 -and (Test-Path -LiteralPath $processPath -PathType Container)) {
-     Write-Host "No files found for processing after filtering in '$processPath'."
-     return
-  }
   
-  # Initialize the XML document.
   $xmlDoc = New-Object -TypeName System.Xml.XmlDocument
-  
-  # Create the root element: <Directory>.
   $rootElement = $xmlDoc.CreateElement("Directory")
   $rootElement.SetAttribute("ExportTime", (Get-Date -Format 'yyyy/MM/dd HH:mm:ss'))
   $rootElement.SetAttribute("SourcePath", $exportRootName) 
   [void]$xmlDoc.AppendChild($rootElement) 
 
-  try {
-    foreach ($file in $files) {
-      # Calculate the relative path within the physical root.
-      $internalRelativePath = $file.FullName.Substring($physicalPathLength).TrimStart('\' , '/')
-      
-      # Construct the final path with the export root name prefix (if applicable).
-      if ([string]::IsNullOrEmpty($exportRootName)) {
-        $finalRelativePath = $internalRelativePath.Replace('\', '/')
-      } else {
-        $finalRelativePath = "$exportRootName/$internalRelativePath".Replace('\', '/').Replace('//', '/')
-      }
-      
-      # Check for file extension exclusion.
-      $extension = $file.Extension.ToLower()
-      $isExcludedExtension = $SnapshotBundleConfig.ExcludedExtensions -contains $extension
-      
-      # Get language hint for all files.
-      $valueToPass = if ([string]::IsNullOrEmpty($file.Extension)) { $file.BaseName } else { $file.Extension }
-      $languageHint = Get-FileLanguageHint -NameOrExtension $valueToPass
-
-      # Create <File> element.
-      $fileElement = $xmlDoc.CreateElement("File")
-      
-      # Add attributes
-      $fileElement.SetAttribute("RelativePath", $finalRelativePath)
-      $fileElement.SetAttribute("LanguageHint", $languageHint)
-      
-      if (-not $isExcludedExtension) {
-        # FIX: Changed -Path to -LiteralPath to avoid wildcard parsing of square brackets
-        $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
-        
-        # Create CDATA section for content to avoid XML parsing issues.
-        $cdataSection = $xmlDoc.CreateCDataSection($content)
-        [void]$fileElement.AppendChild($cdataSection)
-      } else {
-        # Add attributes to indicate content omission.
-        $fileElement.SetAttribute("ContentOmitted", "True")
-        $fileElement.SetAttribute("OmittedReason", "Extension excluded: $extension")
-      }
-      
-      # Append elements.
-      [void]$rootElement.AppendChild($fileElement)
-    }
-
-    # Output the final XML document as a string ONLY.
-    Write-Output $xmlDoc.OuterXml
+  foreach ($file in $files) {
+    $internalRelativePath = $file.FullName.Substring($physicalPathLength).TrimStart('\', '/')
+    $finalRelativePath = if ([string]::IsNullOrEmpty($exportRootName)) { $internalRelativePath.Replace('\', '/') } else { "$exportRootName/$internalRelativePath".Replace('\', '/').Replace('//', '/') }
     
-  } catch {
-    Write-Error "An unexpected error occurred during XML export: $($_.Exception.Message)"
+    $languageHint = Get-FileLanguageHint -NameOrExtension $(if ([string]::IsNullOrEmpty($file.Extension)) { $file.BaseName } else { $file.Extension })
+
+    $fileElement = $xmlDoc.CreateElement("File")
+    $fileElement.SetAttribute("RelativePath", $finalRelativePath)
+    $fileElement.SetAttribute("LanguageHint", $languageHint)
+    
+    $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
+    [void]$fileElement.AppendChild($xmlDoc.CreateCDataSection($content))
+    
+    [void]$rootElement.AppendChild($fileElement)
   }
+  Write-Output $xmlDoc.OuterXml
 }
 
 # --- MODULE EXPORTS ---
