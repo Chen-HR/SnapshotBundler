@@ -7,14 +7,14 @@ A shared configuration object for defining glob-based exclusion criteria.
 $SnapshotBundleConfig = @{
   # Supports .gitignore style glob patterns (e.g., 'bin', '*.log', '**/temp/*')
   ExcludedPatterns = @(
-    'bin/', 'obj/', 'out/', 'tmp/', 'dist/', 'build/', '__pycache__/', 
+    'bin/', 'obj/', 'out/', 'tmp/', 'temp/', 'dist/', 'build/', '__pycache__/', 
     '.git/', '.vs/', '.vscode/', '.venv/', 'node_modules/', 'site-packages/', 'packages/', '*.egg-info/', '.DS_Store/', 
     
     '*.dll', '*.bin', '*.hex', '*.obj', '*.o', '*.lib', '*.exe', '*.py[codz]', 
     '*.img', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.svg', '*.ico', '*.mp4', '*.mov', '*.avi', '*.mp3', '*.wav', '*.mat', '*.drawio', 
     '*.iso', '*.zip', '*.tar', '*.gz', '*.7z', '*.rar', 
     '*.pdf', '*.xps', '*.thmx', '*.o[dt][tsp]', '*.do[ct]', '*.do[ct][mx]', '*.xl[st]', '*.xl[st][mx]', '*.xla', '*.xlam', '*.xlsb', '*.pp[st]', '*.pp[st][mx]', '*.pot', '*.pot[mx]', '*.ppa', '*.ppam', 
-    '*.log', '*.bak', '*.tmp', '*.ttf', '*ignore', '*.lock/', '*.prompt.md'
+    '*.log', '*.bak', '*.tmp', '*.ttf', '*ignore', '*.lock', '*.prompt.md'
   )
 }
 
