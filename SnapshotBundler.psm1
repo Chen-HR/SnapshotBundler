@@ -5,7 +5,7 @@
 A shared configuration object for defining glob-based exclusion criteria.
 #>
 $SnapshotBundleConfig = @{
-  # Supports .gitignore style glob patterns (e.g., 'bin', '*.log', '**/temp/*')
+  # Supports .gitignore style glob patterns.
   ExcludedPatterns = @(
     'bin/', 'obj/', 'out/', 'tmp/', 'temp/', 'dist/', 'build/', '__pycache__/', 
     '.git/', '.vs/', '.vscode/', '.venv/', 'node_modules/', 'site-packages/', 'packages/', '*.egg-info/', '.DS_Store/', 
@@ -20,8 +20,31 @@ $SnapshotBundleConfig = @{
 
 <#
 .SYNOPSIS
+Helper function to combine global patterns, dynamic parameters, and file-based ignore lists.
+#>
+function Get-EffectivePatterns {
+  param(
+    [string[]]$ExcludedPatterns = @(),
+    [string[]]$IgnorePaths = @()
+  )
+  $patterns = [string[]]$SnapshotBundleConfig.ExcludedPatterns + [string[]]$ExcludedPatterns
+
+  foreach ($file in $IgnorePaths) {
+    if (Test-Path $file) {
+      Get-Content $file | ForEach-Object {
+        $line = $_.Trim()
+        if (-not [string]::IsNullOrWhiteSpace($line) -and -not $line.StartsWith("#")) {
+          $patterns += $line
+        }
+      }
+    }
+  }
+  return @($patterns)
+}
+
+<#
+.SYNOPSIS
 Helper function to test if a path matches any of the provided glob patterns.
-Checks full path and individual directory segments.
 #>
 function Test-PathMatchPattern {
   param(
@@ -41,19 +64,16 @@ function Test-PathMatchPattern {
     $patternName = $pattern.TrimEnd('\/')
     $wildcard = [System.Management.Automation.WildcardPattern]::new($patternName, 'IgnoreCase')
     
-    # Track current path relative to BasePhysicalPath for directory checking
     $currentPathPart = ""
     foreach ($seg in $segments) {
       $currentPathPart = if ($currentPathPart) { Join-Path $currentPathPart $seg } else { $seg }
       
       if ($wildcard.IsMatch($seg)) {
         if ($isDirMatch) {
-            # Only exclude if the segment is a directory
             if (Test-Path (Join-Path $BasePhysicalPath $currentPathPart) -PathType Container) {
                 return $true
             }
         } else {
-            # General match: exclude if it matches
             return $true
         }
       }
@@ -65,71 +85,18 @@ function Test-PathMatchPattern {
 <#
 .SYNOPSIS
 Maps a file's extension or base name to a corresponding language identifier string.
-
-.DESCRIPTION
-This function determines a language hint based on the input string, which can be
-a standard file extension (e.g., '.py') or a dotless file name (e.g., 'Makefile').
-If no specific mapping is found, it defaults to 'text'.
-
-.PARAMETER NameOrExtension
-The file extension string (e.g., ".js") or the file's base name (e.g., "Dockerfile").
-.RETURNS
-A string containing the identified language hint.
 #>
 function Get-FileLanguageHint {
-  param(
-    [string]$NameOrExtension 
-  )
-  
-  # Trim leading dot if it's an extension; the key is used for the switch comparison.
+  param([string]$NameOrExtension)
   $key = $NameOrExtension.ToLower().TrimStart('.')
-
-  # The switch statement implicitly returns the output.
   switch ($key) {
-    # --- Standard Extensions ---
-    'ps1'   { 'powershell' }
-    'psm1'  { 'powershell' }
-    'psd1'  { 'powershell' }
-    'cmd'   { 'cmd' }
-    'sh'    { 'bash' }
-    'js'    { 'javascript' }
-    'ts'    { 'typescript' }
-    'jsx'   { 'jsx' }
-    'tsx'   { 'tsx' }
-    'json'  { 'json' }
-    'html'  { 'html' }
-    'htm'   { 'html' }
-    'css'   { 'css' }
-    'scss'  { 'scss' }
-    'less'  { 'less' }
-    'py'    { 'python' }
-    'pyi'   { 'python' }
-    'cs'    { 'csharp' }
-    'java'  { 'java' }
-    'c'     { 'c' }
-    'h'     { 'c' }
-    'cpp'   { 'cpp' }
-    'hpp'   { 'cpp' }
-    'php'   { 'php' }
-    'rb'    { 'ruby' }
-    'go'    { 'go' }
-    'yaml'  { 'yaml' }
-    'yml'   { 'yaml' }
-    'toml'  { 'toml' }
-    'xml'   { 'xml' }
-    'md'    { 'markdown' }
-    'tex'   { 'latex' }
-    'lua'   { 'lua' }
-    'm'     { 'matlab' }
-    'csv'   { 'csv' }
-    'tsv'   { 'tsv' }
-
-    # --- Handle dotless files (BaseName) ---
-    'makefile'   { 'makefile' }
-    'dockerfile' { 'dockerfile' }
-    'readme'     { 'markdown' }
-    'license'    { 'text' }
-
+    'ps1' { 'powershell' }; 'psm1' { 'powershell' }; 'psd1' { 'powershell' }; 'cmd' { 'cmd' }; 'sh' { 'bash' }
+    'js' { 'javascript' }; 'ts' { 'typescript' }; 'jsx' { 'jsx' }; 'tsx' { 'tsx' }
+    'json' { 'json' }; 'html' { 'html' }; 'htm' { 'html' }; 'css' { 'css' }; 'scss' { 'scss' }; 'less' { 'less' }
+    'py' { 'python' }; 'pyi' { 'python' }; 'cs' { 'csharp' }; 'java' { 'java' }; 'c' { 'c' }; 'h' { 'c' }; 'cpp' { 'cpp' }; 'hpp' { 'cpp' }
+    'php' { 'php' }; 'rb' { 'ruby' }; 'go' { 'go' }; 'yaml' { 'yaml' }; 'yml' { 'yaml' }; 'toml' { 'toml' }; 'xml' { 'xml' }
+    'md' { 'markdown' }; 'tex' { 'latex' }; 'lua' { 'lua' }; 'm' { 'matlab' }; 'csv' { 'csv' }; 'tsv' { 'tsv' }
+    'makefile' { 'makefile' }; 'dockerfile' { 'dockerfile' }; 'readme' { 'markdown' }; 'license' { 'text' }
     default { 'text' }
   }
 }
@@ -154,24 +121,60 @@ function Get-SnapshotBundleFiles {
   }
 
   $physicalPathLength = $physicalPath.Length
-  
-  $effectivePatterns = [string[]]$SnapshotBundleConfig.ExcludedPatterns + [string[]]$ExcludedPatterns
-
-  foreach ($file in $IgnorePaths) {
-    if (Test-Path $file) {
-      Get-Content $file | ForEach-Object {
-        $line = $_.Trim()
-        if (-not [string]::IsNullOrWhiteSpace($line) -and -not $line.StartsWith("#")) {
-          $effectivePatterns += $line
-        }
-      }
-    }
-  }
+  $effectivePatterns = Get-EffectivePatterns -ExcludedPatterns $ExcludedPatterns -IgnorePaths $IgnorePaths
 
   Get-ChildItem -LiteralPath $physicalPath -Recurse -File | Where-Object {
     $relativePath = $_.FullName.Substring($physicalPathLength).TrimStart('\', '/')
     -not (Test-PathMatchPattern -Path $relativePath -BasePhysicalPath $physicalPath -Patterns $effectivePatterns)
   }
+}
+
+<#
+.SYNOPSIS
+Generates a plaintext file tree using the PSTree module if available.
+#>
+function Get-SnapshotBundleFileTree {
+  param(
+    [Parameter(Mandatory=$true)] [string]$Path,
+    [string[]]$EffectivePatterns = @()
+  )
+  
+  if (-not (Get-Command Get-PSTree -ErrorAction SilentlyContinue)) { return $null }
+  if (-not (Get-Command Get-PSTreeStyle -ErrorAction SilentlyContinue)) { return $null }
+
+  $style = Get-PSTreeStyle
+  $originalRendering = $style.OutputRendering
+  $style.OutputRendering = 'PlainText'
+
+  try {
+    $treeExclude = @()
+    foreach ($p in $EffectivePatterns) {
+      if (-not [string]::IsNullOrWhiteSpace($p)) {
+        $cleaned = $p.TrimEnd('\/')
+        if ($cleaned -notmatch '[/\\]') {
+          $treeExclude += $cleaned
+        }
+      }
+    }
+    
+    $psTreeParams = @{
+      LiteralPath = $Path
+      Force = $true
+      Recurse = $true
+      ErrorAction = 'SilentlyContinue'
+    }
+    if ($treeExclude.Count -gt 0) {
+      $psTreeParams.Exclude = $treeExclude
+    }
+    
+    $treeNodes = Get-PSTree @psTreeParams
+    if ($treeNodes) {
+      return ($treeNodes.Hierarchy -join "`n")
+    }
+  } finally {
+    $style.OutputRendering = $originalRendering
+  }
+  return $null
 }
 
 # --- EXPORT FUNCTIONS ---
@@ -189,9 +192,18 @@ function Invoke-SnapshotBundleToMarkdown {
   $physicalPathLength = $physicalPath.Length
   $exportRootName = if ([string]::IsNullOrEmpty($Path)) { "" } else { $Path.Replace('\', '/').TrimEnd('/') }
 
-  $files = Get-SnapshotBundleFiles -Path $processPath -ExcludedPatterns $ExcludedPatterns -IgnorePaths $IgnorePaths
+  $effectivePatterns = Get-EffectivePatterns -ExcludedPatterns $ExcludedPatterns -IgnorePaths $IgnorePaths
+  $files = Get-ChildItem -LiteralPath $physicalPath -Recurse -File | Where-Object {
+    $relativePath = $_.FullName.Substring($physicalPathLength).TrimStart('\', '/')
+    -not (Test-PathMatchPattern -Path $relativePath -BasePhysicalPath $physicalPath -Patterns $effectivePatterns)
+  }
   
   $markdownOutput = "# Directory: ``$exportRootName```n`n- Export Time: $(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')"
+  
+  $treeOutput = Get-SnapshotBundleFileTree -Path $physicalPath -EffectivePatterns $effectivePatterns
+  if ($treeOutput) {
+    $markdownOutput += "`n`n## File Tree`n`n````````filetree`n$treeOutput`n````````"
+  }
   
   foreach ($file in $files) {
     $internalRelativePath = $file.FullName.Substring($physicalPathLength).TrimStart('\', '/')
@@ -200,7 +212,6 @@ function Invoke-SnapshotBundleToMarkdown {
     $valueToPass = if ([string]::IsNullOrEmpty($file.Extension)) { $file.BaseName } else { $file.Extension }
     $languageHint = Get-FileLanguageHint -NameOrExtension $valueToPass
     $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
-
     
     $markdownOutput += "`n`n## File: ``$finalRelativePath```n`n````````$languageHint`n$content`n````````" 
   }
@@ -220,12 +231,24 @@ function Invoke-SnapshotBundleToXml {
   $physicalPathLength = $physicalPath.Length
   $exportRootName = if ([string]::IsNullOrEmpty($Path)) { "" } else { $Path.Replace('\', '/').TrimEnd('/') }
 
-  $files = Get-SnapshotBundleFiles -Path $processPath -ExcludedPatterns $ExcludedPatterns -IgnorePaths $IgnorePaths
+  $effectivePatterns = Get-EffectivePatterns -ExcludedPatterns $ExcludedPatterns -IgnorePaths $IgnorePaths
+  $files = Get-ChildItem -LiteralPath $physicalPath -Recurse -File | Where-Object {
+    $relativePath = $_.FullName.Substring($physicalPathLength).TrimStart('\', '/')
+    -not (Test-PathMatchPattern -Path $relativePath -BasePhysicalPath $physicalPath -Patterns $effectivePatterns)
+  }
   
   $xmlDoc = New-Object -TypeName System.Xml.XmlDocument
   $rootElement = $xmlDoc.CreateElement("Directory")
   $rootElement.SetAttribute("ExportTime", (Get-Date -Format 'yyyy/MM/dd HH:mm:ss'))
   $rootElement.SetAttribute("SourcePath", $exportRootName) 
+  
+  $treeOutput = Get-SnapshotBundleFileTree -Path $physicalPath -EffectivePatterns $effectivePatterns
+  if ($treeOutput) {
+    $treeElement = $xmlDoc.CreateElement("FileTree")
+    [void]$treeElement.AppendChild($xmlDoc.CreateCDataSection($treeOutput))
+    [void]$rootElement.AppendChild($treeElement)
+  }
+
   [void]$xmlDoc.AppendChild($rootElement) 
 
   foreach ($file in $files) {
@@ -247,4 +270,4 @@ function Invoke-SnapshotBundleToXml {
 }
 
 # --- MODULE EXPORTS ---
-Export-ModuleMember -Function Invoke-SnapshotBundleToMarkdown, Invoke-SnapshotBundleToXml, Get-SnapshotBundleFiles, Get-FileLanguageHint -Variable SnapshotBundleConfig
+Export-ModuleMember -Function Invoke-SnapshotBundleToMarkdown, Invoke-SnapshotBundleToXml, Get-SnapshotBundleFiles, Get-SnapshotBundleFileTree, Get-FileLanguageHint -Variable SnapshotBundleConfig
