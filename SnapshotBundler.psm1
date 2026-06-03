@@ -7,9 +7,14 @@ A shared configuration object for defining glob-based exclusion criteria.
 $SnapshotBundleConfig = @{
   # Supports .gitignore style glob patterns (e.g., 'bin', '*.log', '**/temp/*')
   ExcludedPatterns = @(
-    'bin', 'obj', 'out', 'tmp', 'dist', 'build', '__pycache__', 
-    '.git', '.vs', '.vscode', '.venv', 'node_modules',
-    '*.dll', '*.exe', '*.log', '*.tmp', '*.DS_Store', '*.py[codz]'
+    'bin/', 'obj/', 'out/', 'tmp/', 'dist/', 'build/', '__pycache__/', 
+    '.git/', '.vs/', '.vscode/', '.venv/', 'node_modules/', 'site-packages/', 'packages/', '*.egg-info/', '.DS_Store/', 
+    
+    '*.dll', '*.bin', '*.hex', '*.obj', '*.o', '*.lib', '*.exe', '*.py[codz]', 
+    '*.img', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.svg', '*.ico', '*.mp4', '*.mov', '*.avi', '*.mp3', '*.wav', '*.mat', '*.drawio', 
+    '*.iso', '*.zip', '*.tar', '*.gz', '*.7z', '*.rar', 
+    '*.pdf', '*.xps', '*.thmx', '*.o[dt][tsp]', '*.do[ct]', '*.do[ct][mx]', '*.xl[st]', '*.xl[st][mx]', '*.xla', '*.xlam', '*.xlsb', '*.pp[st]', '*.pp[st][mx]', '*.pot', '*.pot[mx]', '*.ppa', '*.ppam', 
+    '*.log', '*.bak', '*.tmp', '*.ttf', '*ignore', '*.lock/', '*.prompt.md'
   )
 }
 
@@ -21,20 +26,37 @@ Checks full path and individual directory segments.
 function Test-PathMatchPattern {
   param(
     [Parameter(Mandatory=$true)] [string]$Path,
-    [Parameter(Mandatory=$true)] [string[]]$Patterns
+    [Parameter(Mandatory=$true)] [string]$BasePhysicalPath,
+    [string[]]$Patterns = @()
   )
-  # Split path into segments to check directory levels
+  
+  if ($null -eq $Patterns -or $Patterns.Count -eq 0) { return $false }
+
   $segments = $Path -split '[\\/]'
   
   foreach ($pattern in $Patterns) {
-    $wildcard = [System.Management.Automation.WildcardPattern]::new($pattern, 'IgnoreCase')
+    if ([string]::IsNullOrWhiteSpace($pattern)) { continue }
     
-    # Check if the full path matches
-    if ($wildcard.IsMatch($Path)) { return $true }
+    $isDirMatch = $pattern -like "*[/\\]"
+    $patternName = $pattern.TrimEnd('\/')
+    $wildcard = [System.Management.Automation.WildcardPattern]::new($patternName, 'IgnoreCase')
     
-    # Check if any part of the path matches (e.g., if 'bin' matches any directory in the path)
+    # Track current path relative to BasePhysicalPath for directory checking
+    $currentPathPart = ""
     foreach ($seg in $segments) {
-      if ($wildcard.IsMatch($seg)) { return $true }
+      $currentPathPart = if ($currentPathPart) { Join-Path $currentPathPart $seg } else { $seg }
+      
+      if ($wildcard.IsMatch($seg)) {
+        if ($isDirMatch) {
+            # Only exclude if the segment is a directory
+            if (Test-Path (Join-Path $BasePhysicalPath $currentPathPart) -PathType Container) {
+                return $true
+            }
+        } else {
+            # General match: exclude if it matches
+            return $true
+        }
+      }
     }
   }
   return $false
@@ -66,6 +88,8 @@ function Get-FileLanguageHint {
   switch ($key) {
     # --- Standard Extensions ---
     'ps1'   { 'powershell' }
+    'psm1'  { 'powershell' }
+    'psd1'  { 'powershell' }
     'cmd'   { 'cmd' }
     'sh'    { 'bash' }
     'js'    { 'javascript' }
@@ -118,7 +142,8 @@ function Get-SnapshotBundleFiles {
   [CmdletBinding()]
   param(
     [Parameter(Mandatory=$true)] [string]$Path,
-    [string[]]$ExcludedPatterns = @()
+    [string[]]$ExcludedPatterns = @(),
+    [string[]]$IgnorePaths = @()
   )
 
   try {
@@ -130,19 +155,33 @@ function Get-SnapshotBundleFiles {
 
   $physicalPathLength = $physicalPath.Length
   
-  # Merge global config with dynamic parameters
-  $effectivePatterns = $SnapshotBundleConfig.ExcludedPatterns + $ExcludedPatterns
+  $effectivePatterns = [string[]]$SnapshotBundleConfig.ExcludedPatterns + [string[]]$ExcludedPatterns
+
+  foreach ($file in $IgnorePaths) {
+    if (Test-Path $file) {
+      Get-Content $file | ForEach-Object {
+        $line = $_.Trim()
+        if (-not [string]::IsNullOrWhiteSpace($line) -and -not $line.StartsWith("#")) {
+          $effectivePatterns += $line
+        }
+      }
+    }
+  }
 
   Get-ChildItem -LiteralPath $physicalPath -Recurse -File | Where-Object {
     $relativePath = $_.FullName.Substring($physicalPathLength).TrimStart('\', '/')
-    -not (Test-PathMatchPattern -Path $relativePath -Patterns $effectivePatterns)
+    -not (Test-PathMatchPattern -Path $relativePath -BasePhysicalPath $physicalPath -Patterns $effectivePatterns)
   }
 }
+
+# --- EXPORT FUNCTIONS ---
+
 function Invoke-SnapshotBundleToMarkdown {
   [CmdletBinding()]
   param(
-    [Parameter(Position=0)] [string]$Path = "",
-    [string[]]$ExcludedPatterns = @()
+    [Parameter(Position=0)] [string]$Path = ".",
+    [string[]]$ExcludedPatterns = @(),
+    [string[]]$IgnorePaths = @()
   )
 
   $processPath = if ([string]::IsNullOrEmpty($Path)) { "." } else { $Path }
@@ -150,9 +189,9 @@ function Invoke-SnapshotBundleToMarkdown {
   $physicalPathLength = $physicalPath.Length
   $exportRootName = if ([string]::IsNullOrEmpty($Path)) { "" } else { $Path.Replace('\', '/').TrimEnd('/') }
 
-  $files = Get-SnapshotBundleFiles -Path $processPath -ExcludedPatterns $ExcludedPatterns
+  $files = Get-SnapshotBundleFiles -Path $processPath -ExcludedPatterns $ExcludedPatterns -IgnorePaths $IgnorePaths
   
-  $markdownOutput = "# Directory: ``$exportRootName```n`n- Export Time: $(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')`n`n"
+  $markdownOutput = "# Directory: ``$exportRootName```n`n- Export Time: $(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')"
   
   foreach ($file in $files) {
     $internalRelativePath = $file.FullName.Substring($physicalPathLength).TrimStart('\', '/')
@@ -160,11 +199,10 @@ function Invoke-SnapshotBundleToMarkdown {
 
     $valueToPass = if ([string]::IsNullOrEmpty($file.Extension)) { $file.BaseName } else { $file.Extension }
     $languageHint = Get-FileLanguageHint -NameOrExtension $valueToPass
-
-    $markdownOutput += "## File: ``$finalRelativePath```n`n" 
-    
     $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
-    $markdownOutput += "````````$languageHint`n$content`n`````````n`n"
+
+    
+    $markdownOutput += "`n`n## File: ``$finalRelativePath```n`n````````$languageHint`n$content`n````````" 
   }
   Write-Output $markdownOutput
 }
@@ -172,8 +210,9 @@ function Invoke-SnapshotBundleToMarkdown {
 function Invoke-SnapshotBundleToXml {
   [CmdletBinding()]
   param(
-    [Parameter(Position=0)] [string]$Path = "",
-    [string[]]$ExcludedPatterns = @()
+    [Parameter(Position=0)] [string]$Path = ".",
+    [string[]]$ExcludedPatterns = @(),
+    [string[]]$IgnorePaths = @()
   )
 
   $processPath = if ([string]::IsNullOrEmpty($Path)) { "." } else { $Path }
@@ -181,7 +220,7 @@ function Invoke-SnapshotBundleToXml {
   $physicalPathLength = $physicalPath.Length
   $exportRootName = if ([string]::IsNullOrEmpty($Path)) { "" } else { $Path.Replace('\', '/').TrimEnd('/') }
 
-  $files = Get-SnapshotBundleFiles -Path $processPath -ExcludedPatterns $ExcludedPatterns
+  $files = Get-SnapshotBundleFiles -Path $processPath -ExcludedPatterns $ExcludedPatterns -IgnorePaths $IgnorePaths
   
   $xmlDoc = New-Object -TypeName System.Xml.XmlDocument
   $rootElement = $xmlDoc.CreateElement("Directory")

@@ -2,22 +2,24 @@
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.0%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
 
-**SnapshotBundler** is a lightweight PowerShell module designed to consolidate an entire project directory into a single, structured file (**Markdown** or **XML**). 
+**SnapshotBundler** is a lightweight PowerShell module designed to consolidate an entire project directory into a single, structured file (**Markdown** or **XML**).
 
-It intelligently filters out binary files and build artifacts, creating a clean, readable "snapshot" of your source code. This tool is ideal for **code reviews**, **project archiving**, **creating technical documentation appendices**, or simply sharing a codebase in a portable format.
+It intelligently filters out binary files and build artifacts, creating a clean, readable snapshot of your source code. This tool is ideal for code reviews, project archiving, creating technical documentation appendices, or simply sharing a codebase in a portable format.
 
 ---
 
-## ✨ Features
+## Features
 
 * **Project Consolidation**: Merges scattered source files into one comprehensive document.
-* **Smart Filtering**: Automatically excludes compiled binaries (e.g., `.dll`, `.exe`), media files, and heavy directories (e.g., `node_modules`, `.git`, `bin`) to keep the snapshot lightweight.
+* **Advanced Filtering**: 
+  * Supports `.gitignore` style glob patterns.
+  * Use trailing slash (e.g., `bin/`) to specifically exclude directories, while allowing files named `bin`.
 * **Readable Markdown Output**: Generates Markdown with auto-detected syntax highlighting hints (e.g., `python`, `csharp`, `json`) for optimal readability.
 * **Structured XML Output**: Provides a strictly structured XML format suitable for programmatic processing, reporting, or integration with other tools.
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -34,56 +36,52 @@ Alternatively, you can import it manually from any location:
 
 ```powershell
 Import-Module ".\Path\To\SnapshotBundler\SnapshotBundler.psd1"
-
 ```
 
 ---
 
-## 💻 Usage
+## Usage
 
 ### 1. Export to Markdown (`.md`)
-
-Best for human readability, documentation, or code reviews. The output includes file paths as headers and code fences for content.
 
 ```powershell
 # Export the current directory to a Markdown file
 Invoke-SnapshotBundleToMarkdown | Out-File -FilePath "SourceSnapshot.md" -Encoding UTF8
 
-# Export a specific project path
-Invoke-SnapshotBundleToMarkdown -Path "C:\Projects\BackendAPI" | Out-File "BackendAPI.md" -Encoding UTF8
-
+# Export with custom patterns and gitignore files
+Invoke-SnapshotBundleToMarkdown -ExcludedPatterns @("temp/") -IgnorePaths @(".gitignore") > "SourceSnapshot.md"
 ```
 
 ### 2. Export to XML (`.xml`)
 
-Best for data processing or when a strict schema is required.
-
 ```powershell
 # Export the current directory to an XML file
 Invoke-SnapshotBundleToXml | Out-File -FilePath "SourceSnapshot.xml" -Encoding UTF8
-
 ```
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
-The module exposes a global configuration variable `$SnapshotBundleConfig`, allowing you to customize exclusion rules dynamically in your session.
+The module exposes a global configuration variable `$SnapshotBundleConfig`. You can modify `ExcludedPatterns` to change global exclusion rules.
 
-### modifying Exclusion Rules
+### Exclusion Syntax
 
-You can add specific extensions or directory names to ignore during the bundling process.
+* **Glob Patterns**: Use wildcards (e.g., `*.log`, `*.tmp`).
+* **Directory-Specific**: Use a trailing slash (e.g., `bin/`) to exclude only directories. If a file is named `bin`, it will be preserved.
+
+### Modifying Exclusion Rules
 
 ```powershell
-# Example: Exclude temporary folder and TIFF images
-$SnapshotBundleConfig.ExcludedDirectories += "temp_output"
-$SnapshotBundleConfig.ExcludedExtensions += ".tiff"
-
+# Add a new pattern to the global configuration
+$SnapshotBundleConfig.ExcludedPatterns += "dist/"
 ```
 
-### Default Exclusions
+### Dynamic Parameters
 
-By default, the tool excludes:
+You can also pass rules at runtime without modifying the global config:
 
-* **Directories**: `node_modules`, `.git`, `bin`, `obj`, `dist`, `build`, `.vscode`, etc.
-* **Extensions**: `.exe`, `.dll`, `.zip`, `.png`, `.jpg`, `.log`, etc.
+```powershell
+# Pass dynamic patterns and external gitignore files
+Invoke-SnapshotBundleToMarkdown -ExcludedPatterns @("temp/") -IgnorePaths @(".gitignore", "my_rules.ignore")
+```
