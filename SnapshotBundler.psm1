@@ -8,9 +8,9 @@ $SnapshotBundleConfig = @{
   # Supports .gitignore style glob patterns.
   ExcludedPatterns = @(
     'bin/', 'obj/', 'out/', 'tmp/', 'temp/', 'dist/', 'build/', '__pycache__/', 
-    '.git/', '.vs/', '.vscode/', '.venv/', 'node_modules/', 'site-packages/', 'packages/', '*.egg-info/', '.DS_Store/', 
+    '.git/', '.vs/', '.vscode/', '.venv/', 'node_modules/', 'site-packages/', 'packages/', '*.egg-info/', 
     
-    '*.dll', '*.bin', '*.hex', '*.obj', '*.o', '*.lib', '*.exe', '*.py[codz]', 
+    '*.dll', '*.bin', '*.hex', '*.obj', '*.o', '*.lib', '*.exe', '*.py[codz]', '.DS_Store', 
     '*.img', '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.svg', '*.ico', '*.mp4', '*.mov', '*.avi', '*.mp3', '*.wav', '*.mat', '*.drawio', 
     '*.iso', '*.zip', '*.tar', '*.gz', '*.7z', '*.rar', 
     '*.pdf', '*.xps', '*.thmx', '*.o[dt][tsp]', '*.do[ct]', '*.do[ct][mx]', '*.xl[st]', '*.xl[st][mx]', '*.xla', '*.xlam', '*.xlsb', '*.pp[st]', '*.pp[st][mx]', '*.pot', '*.pot[mx]', '*.ppa', '*.ppam', 
@@ -150,9 +150,13 @@ function Get-SnapshotBundleFileTree {
     $treeExclude = @()
     foreach ($p in $EffectivePatterns) {
       if (-not [string]::IsNullOrWhiteSpace($p)) {
+        $isDirMatch = $p -match '[/\\]$'
         $cleaned = $p.TrimEnd('\/')
-        if ($cleaned -notmatch '[/\\]') {
-          $treeExclude += $cleaned
+
+        if ($isDirMatch -or -not $cleaned.StartsWith("*")) {
+          if ($cleaned -notmatch '[/\\]') {
+            $treeExclude += $cleaned
+          }
         }
       }
     }
